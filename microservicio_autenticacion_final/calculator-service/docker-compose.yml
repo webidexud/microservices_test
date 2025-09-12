@@ -1,0 +1,33 @@
+services:
+  # Backend Calculadora
+  calculator-backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: calculator_backend
+    environment:
+      AUTH_SERVICE_URL: http://host.docker.internal:3001
+      PORT: 3002
+    ports:
+      - "3002:3002"
+    networks:
+      - calculator_network
+    restart: unless-stopped
+
+  # Frontend Calculadora
+  calculator-frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: calculator_frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - calculator-backend
+    networks:
+      - calculator_network
+    restart: unless-stopped
+
+networks:
+  calculator_network:
+    driver: bridge
