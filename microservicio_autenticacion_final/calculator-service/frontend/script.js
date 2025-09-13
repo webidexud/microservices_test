@@ -6,22 +6,41 @@ let userPermissions = [];
 let currentExpression = '';
 
 // ============================================================================
-// INICIALIZACIÓN
+// INICIALIZACIÓN CON SSO
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async function() {
-    const token = localStorage.getItem('authToken');
+    // SSO: Leer token de URL o localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    
+    let token = localStorage.getItem('authToken');
+    
+    if (tokenFromUrl) {
+        console.log('Token recibido por URL, guardando en localStorage...');
+        // Guardar token de URL en localStorage
+        localStorage.setItem('authToken', tokenFromUrl);
+        token = tokenFromUrl;
+        
+        // Limpiar URL sin recargar la página
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+    }
     
     if (!token) {
+        console.log('No se encontró token, mostrando login requerido');
         showLoginRequired();
         return;
     }
     
     try {
+        console.log('Cargando información del usuario...');
         await loadUserInfo();
         initializeCalculator();
     } catch (error) {
         console.error('Error loading user info:', error);
+        // Si el token es inválido, limpiar localStorage y mostrar login
+        localStorage.removeItem('authToken');
         showLoginRequired();
     }
 });
@@ -29,15 +48,23 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function loadUserInfo() {
     const token = localStorage.getItem('authToken');
     
+    console.log('Haciendo petición a:', `${API_BASE}/api/user-info`);
+    
     const response = await fetch(`${API_BASE}/api/user-info`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
     
+    console.log('Respuesta del servidor:', response.status);
+    
     if (!response.ok) {
-        throw new Error('Failed to load user info');
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error(`Failed to load user info: ${errorData.error || response.statusText}`);
     }
     
     const data = await response.json();
+    console.log('Datos del usuario cargados:', data);
+    
     currentUser = data.user;
     userPermissions = data.permissions;
     
@@ -54,12 +81,14 @@ async function loadUserInfo() {
 }
 
 function initializeCalculator() {
+    console.log('Inicializando calculadora...');
     document.getElementById('loginRequired').style.display = 'none';
     document.getElementById('calculatorApp').style.display = 'block';
     
     // Mostrar historial solo si tiene permisos
     if (userPermissions.includes('calculadora.historial')) {
         document.getElementById('historialSection').style.display = 'block';
+        console.log('Historial habilitado');
     }
 }
 
@@ -94,6 +123,7 @@ function updateCalculatorButtons() {
         if (!userPermissions.includes(permission)) {
             button.disabled = true;
             button.title = `Requiere permiso: ${permission}`;
+            console.log(`Botón deshabilitado: ${permission}`);
         }
     });
 }
@@ -153,13 +183,13 @@ async function calculate() {
     }
     
     try {
-        // Parsear la expresión simple
         const result = await evaluateExpression(expression);
         document.getElementById('display').value = result;
         currentExpression = result.toString();
     } catch (error) {
         document.getElementById('display').value = 'Error';
         console.error('Calculation error:', error);
+        alert(`Error en el cálculo: ${error.message}`);
         setTimeout(() => {
             clearDisplay();
         }, 2000);
@@ -167,12 +197,11 @@ async function calculate() {
 }
 
 async function evaluateExpression(expression) {
-    // Parser simple para operaciones básicas
     const operators = ['+', '-', '*', '/'];
     let operator = null;
     let operatorIndex = -1;
     
-    // Encontrar el último operador (evaluación de izquierda a derecha)
+    // Encontrar el último operador
     for (let i = expression.length - 1; i >= 0; i--) {
         if (operators.includes(expression[i]) && i > 0) {
             operator = expression[i];
@@ -187,6 +216,10 @@ async function evaluateExpression(expression) {
     
     const a = parseFloat(expression.substring(0, operatorIndex));
     const b = parseFloat(expression.substring(operatorIndex + 1));
+    
+    if (isNaN(a) || isNaN(b)) {
+        throw new Error('Valores inválidos en la expresión');
+    }
     
     const token = localStorage.getItem('authToken');
     
@@ -208,6 +241,8 @@ async function evaluateExpression(expression) {
             throw new Error('Operador no válido');
     }
     
+    console.log(`Ejecutando operación: ${a} ${operator} ${b}`);
+    
     const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -223,6 +258,7 @@ async function evaluateExpression(expression) {
     }
     
     const data = await response.json();
+    console.log('Resultado:', data);
     return data.resultado;
 }
 
@@ -283,7 +319,6 @@ document.addEventListener('keydown', function(e) {
     if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.'].includes(key)) {
         appendToDisplay(key);
     } else if (['+', '-', '*', '/'].includes(key)) {
-        // Verificar permisos antes de agregar operador
         const permissionMap = {
             '+': 'calculadora.suma',
             '-': 'calculadora.resta', 

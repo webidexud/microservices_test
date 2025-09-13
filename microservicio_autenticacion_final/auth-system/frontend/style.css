@@ -370,6 +370,8 @@ code {
     padding: 24px;
 }
 
+.app-icon.orange { background: #f97316; }
+
 .admin-section.active {
     display: block;
 }

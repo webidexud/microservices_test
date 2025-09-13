@@ -6,7 +6,7 @@ services:
       dockerfile: Dockerfile
     container_name: calculator_backend
     environment:
-      AUTH_SERVICE_URL: http://host.docker.internal:3001
+      AUTH_SERVICE_URL: http://auth_backend:3001
       PORT: 3002
     ports:
       - "3002:3002"

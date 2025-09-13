@@ -19,7 +19,8 @@ function renderDashboard(user) {
         { name: 'auth-admin', displayName: 'Administración del Sistema', description: 'Gestión de usuarios, roles y permisos', icon: '🛡️', color: 'red' },
         { name: 'projects', displayName: 'Sistema de Proyectos SIEXUD', description: 'Gestión de proyectos de extensión universitaria', icon: '📋', color: 'blue' },
         { name: 'certificates', displayName: 'Módulo de Certificados', description: 'Gestión y emisión de certificados', icon: '🏆', color: 'green' },
-        { name: 'dashboard', displayName: 'Dashboard Ejecutivo', description: 'Tablero de control y reportes', icon: '📊', color: 'purple' }
+        { name: 'dashboard', displayName: 'Dashboard Ejecutivo', description: 'Tablero de control y reportes', icon: '📊', color: 'purple' },
+        { name: 'calculadora', displayName: 'Calculadora Institucional', description: 'Sistema de cálculos matemáticos con permisos por rol', icon: '🧮', color: 'orange' }
     ];
     
     availableApps.forEach(app => {
@@ -46,6 +47,14 @@ function renderDashboard(user) {
 function handleAppClick(appName, displayName) {
     if (appName === 'auth-admin') {
         window.location.href = 'admin.html';
+    } else if (appName === 'calculadora') {
+        // SSO: Redirigir a calculadora con token
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            window.location.href = `http://localhost:8081?token=${encodeURIComponent(token)}`;
+        } else {
+            alert('Error: No se encontró token de autenticación');
+        }
     } else {
         alert(`Redirigiendo a ${displayName}...\n\nURL del microservicio: http://localhost:300X/${appName}\n\nEn producción, aquí se redirigiría al microservicio correspondiente.`);
     }
