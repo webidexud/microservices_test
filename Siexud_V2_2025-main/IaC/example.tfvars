@@ -1,0 +1,7 @@
+NODE_ENV      = "development"
+DB_HOST       = "localhost"
+DB_USER       = "devuser"
+DB_PASSWORD   = "devpassword"
+DB_NAME       = "devdb"
+DB_PORT       = "5432"
+PORT          = "3000"
