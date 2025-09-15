@@ -1,23 +1,139 @@
-const API_BASE = 'http://localhost:8000/calculator';
+const API_BASE = 'http://localhost:3002';
+const AUTH_BASE = 'http://localhost:3001';
 
 let currentUser = null;
 let userPermissions = [];
 let currentExpression = '';
 
-// Initialization
+// ============================================================================
+// INICIALIZACIÓN CON SESIÓN GLOBAL - NUEVO
+// ============================================================================
+
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('🧮 Inicializando calculadora...');
+    
     try {
-        await loadUserInfo();
-        initializeCalculator();
+        // NUEVO: Intentar inicializar con sesión global
+        const authResult = await initializeWithGlobalSession();
+        
+        if (authResult.success) {
+            console.log('✅ Sesión global válida');
+            await loadUserInfoFromSession(authResult.data);
+            initializeCalculator();
+        } else {
+            console.log('❌ Sin sesión global, intentando método legacy');
+            await tryLegacyAuth();
+        }
     } catch (error) {
-        console.error('Error loading user info:', error);
+        console.error('Error en inicialización:', error);
         showLoginRequired();
     }
 });
 
-async function loadUserInfo() {
-    const response = await fetch(`${API_BASE}/user-info`, {
-        credentials: 'include'
+// NUEVO: Verificar sesión global
+async function initializeWithGlobalSession() {
+    try {
+        // Verificar si hay sesión activa
+        const sessionResponse = await fetch(`${AUTH_BASE}/auth/check-session`, {
+            method: 'GET',
+            credentials: 'include', // Incluir cookies
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!sessionResponse.ok) {
+            return { success: false, error: 'No hay sesión activa' };
+        }
+
+        const sessionData = await sessionResponse.json();
+        
+        // Verificar acceso específico a calculadora
+        const appResponse = await fetch(`${AUTH_BASE}/auth/validate/calculadora`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!appResponse.ok) {
+            const error = await appResponse.json();
+            return { success: false, error: error.error || 'Sin acceso a calculadora' };
+        }
+
+        const appData = await appResponse.json();
+        
+        return {
+            success: true,
+            data: {
+                user: sessionData.user,
+                appAccess: appData.appAccess,
+                permissions: appData.appAccess.permissions,
+                roles: appData.appAccess.roles
+            }
+        };
+        
+    } catch (error) {
+        console.error('Error verificando sesión global:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// MANTENER: Método legacy para compatibilidad (token por URL)
+async function tryLegacyAuth() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    
+    let token = localStorage.getItem('authToken');
+    
+    if (tokenFromUrl) {
+        console.log('Token recibido por URL, guardando...');
+        localStorage.setItem('authToken', tokenFromUrl);
+        token = tokenFromUrl;
+        
+        // Limpiar URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+    }
+    
+    if (!token) {
+        showLoginRequired();
+        return;
+    }
+    
+    try {
+        await loadUserInfoLegacy();
+        initializeCalculator();
+    } catch (error) {
+        console.error('Error con método legacy:', error);
+        localStorage.removeItem('authToken');
+        showLoginRequired();
+    }
+}
+
+// NUEVO: Cargar info del usuario desde sesión global
+async function loadUserInfoFromSession(authData) {
+    currentUser = {
+        username: authData.user.username,
+        firstName: authData.user.firstName,
+        lastName: authData.user.lastName
+    };
+    
+    userPermissions = authData.permissions || [];
+    
+    console.log('Usuario cargado:', currentUser.username);
+    console.log('Permisos:', userPermissions);
+    
+    updateUI();
+}
+
+// MANTENER: Método legacy de carga de usuario
+async function loadUserInfoLegacy() {
+    const token = localStorage.getItem('authToken');
+    
+    const response = await fetch(`${API_BASE}/api/user-info`, {
+        headers: { 'Authorization': `Bearer ${token}` }
     });
     
     if (!response.ok) {
@@ -25,26 +141,45 @@ async function loadUserInfo() {
     }
     
     const data = await response.json();
+    
     currentUser = data.user;
     userPermissions = data.permissions;
     
-    document.getElementById('userInfo').textContent = data.user.username;
+    updateUI();
+}
+
+// NUEVO: Actualizar interfaz de usuario
+function updateUI() {
+    document.getElementById('userInfo').textContent = 
+        `${currentUser.firstName || currentUser.username} ${currentUser.lastName || ''}`.trim();
     
+    // Actualizar badge de rol si existe
     const roleElement = document.getElementById('userRole');
-    const userRole = data.roles[0] || 'SIN_ROL';
-    roleElement.textContent = userRole;
-    roleElement.className = `role-badge ${userRole.toLowerCase()}`;
+    if (roleElement && userPermissions.length > 0) {
+        const hasAdvancedPerms = userPermissions.some(p => 
+            p.includes('division') || p.includes('multiplicacion') || p.includes('historial')
+        );
+        const role = hasAdvancedPerms ? 'CONTADOR' : 'VISUALIZADOR';
+        
+        roleElement.textContent = role;
+        roleElement.className = `role-badge ${role.toLowerCase()}`;
+    }
     
     updatePermissionsUI();
     updateCalculatorButtons();
 }
 
 function initializeCalculator() {
+    console.log('✅ Calculadora inicializada');
     document.getElementById('loginRequired').style.display = 'none';
     document.getElementById('calculatorApp').style.display = 'block';
     
+    // Mostrar historial solo si tiene permisos
     if (userPermissions.includes('calculadora.historial')) {
-        document.getElementById('historialSection').style.display = 'block';
+        const historialSection = document.getElementById('historialSection');
+        if (historialSection) {
+            historialSection.style.display = 'block';
+        }
     }
 }
 
@@ -53,15 +188,37 @@ function showLoginRequired() {
     document.getElementById('calculatorApp').style.display = 'none';
 }
 
+// ============================================================================
+// FUNCIONES DE NAVEGACIÓN - MEJORADAS
+// ============================================================================
+
 function redirectToAuth() {
     window.location.href = 'http://localhost:8080';
 }
 
-function logout() {
-    window.location.href = 'http://localhost:8080';
+async function logout() {
+    try {
+        // NUEVO: Intentar logout con sesión global
+        await fetch(`${AUTH_BASE}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    } catch (error) {
+        console.error('Error en logout:', error);
+    } finally {
+        // Limpiar localStorage por compatibilidad
+        localStorage.removeItem('authToken');
+        window.location.href = 'http://localhost:8080';
+    }
 }
 
-// Calculator functions
+// ============================================================================
+// FUNCIONES DE CALCULADORA (MANTENER TODAS)
+// ============================================================================
+
 function updateCalculatorButtons() {
     const buttons = document.querySelectorAll('[data-permission]');
     
@@ -77,6 +234,7 @@ function updateCalculatorButtons() {
 
 function updatePermissionsUI() {
     const container = document.getElementById('permissionsList');
+    if (!container) return;
     
     const allPermissions = [
         'calculadora.suma',
@@ -148,6 +306,7 @@ async function evaluateExpression(expression) {
     let operator = null;
     let operatorIndex = -1;
     
+    // Encontrar el último operador
     for (let i = expression.length - 1; i >= 0; i--) {
         if (operators.includes(expression[i]) && i > 0) {
             operator = expression[i];
@@ -167,30 +326,34 @@ async function evaluateExpression(expression) {
         throw new Error('Valores inválidos en la expresión');
     }
     
+    const token = localStorage.getItem('authToken');
+    
     let endpoint;
     switch (operator) {
         case '+':
-            endpoint = '/suma';
+            endpoint = '/api/suma';
             break;
         case '-':
-            endpoint = '/resta';
+            endpoint = '/api/resta';
             break;
         case '*':
-            endpoint = '/multiplicacion';
+            endpoint = '/api/multiplicacion';
             break;
         case '/':
-            endpoint = '/division';
+            endpoint = '/api/division';
             break;
         default:
             throw new Error('Operador no válido');
     }
     
+    console.log(`Ejecutando operación: ${a} ${operator} ${b}`);
+    
     const response = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
         },
-        credentials: 'include',
         body: JSON.stringify({ a, b })
     });
     
@@ -200,13 +363,16 @@ async function evaluateExpression(expression) {
     }
     
     const data = await response.json();
+    console.log('Resultado:', data);
     return data.resultado;
 }
 
 async function loadHistorial() {
+    const token = localStorage.getItem('authToken');
+    
     try {
-        const response = await fetch(`${API_BASE}/historial`, {
-            credentials: 'include'
+        const response = await fetch(`${API_BASE}/api/historial`, {
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (!response.ok) {
@@ -248,7 +414,10 @@ function getOperatorSymbol(operacion) {
     return symbols[operacion] || '?';
 }
 
-// Keyboard events
+// ============================================================================
+// EVENTOS DE TECLADO (MANTENER)
+// ============================================================================
+
 document.addEventListener('keydown', function(e) {
     const key = e.key;
     

@@ -46,31 +46,23 @@ function renderDashboard(user) {
 }
 
 function handleAppClick(appName, displayName) {
-    const token = localStorage.getItem('authToken');
+    console.log(`🔄 Accediendo a ${appName}...`);
     
-    if (!token) {
-        alert('Sesión expirada. Por favor inicie sesión nuevamente.');
-        window.location.href = 'index.html';
-        return;
-    }
-
     if (appName === 'auth-admin') {
         window.location.href = 'admin.html';
     } else if (appName === 'calculadora') {
-        // Direct access through gateway with authentication
-        window.location.href = 'http://localhost:8000/calculator-app';
+        // NUEVO: Acceso directo con sesión global (sin token en URL)
+        window.open('http://localhost:8081', '_blank');
     } else if (appName === 'dashboarddireccion') {
-        // Create redirect page for dashboard
+        // NUEVO: Crear página de opciones para dashboard
         createDashboardRedirect();
     } else {
         alert(`Redirigiendo a ${displayName}...\n\nEn producción, aquí se redirigiría al microservicio correspondiente.`);
     }
 }
 
+// NUEVA FUNCIÓN: Crear ventana de opciones para dashboard
 function createDashboardRedirect() {
-    const token = localStorage.getItem('authToken');
-    
-    // Create a new window/tab with dashboard options
     const dashboardWindow = window.open('', '_blank');
     dashboardWindow.document.write(`
         <!DOCTYPE html>
@@ -99,14 +91,8 @@ function createDashboardRedirect() {
                     width: 100%;
                     text-align: center;
                 }
-                h1 {
-                    color: #1f2937;
-                    margin-bottom: 20px;
-                }
-                p {
-                    color: #6b7280;
-                    margin-bottom: 30px;
-                }
+                h1 { color: #1f2937; margin-bottom: 20px; }
+                p { color: #6b7280; margin-bottom: 30px; }
                 .option-btn {
                     display: block;
                     width: 100%;
@@ -122,22 +108,11 @@ function createDashboardRedirect() {
                     text-decoration: none;
                     transition: background 0.2s;
                 }
-                .option-btn:hover {
-                    background: #2563eb;
-                }
-                .option-btn.upload {
-                    background: #059669;
-                }
-                .option-btn.upload:hover {
-                    background: #047857;
-                }
-                .back-btn {
-                    background: #6b7280;
-                    margin-top: 20px;
-                }
-                .back-btn:hover {
-                    background: #4b5563;
-                }
+                .option-btn:hover { background: #2563eb; }
+                .option-btn.upload { background: #059669; }
+                .option-btn.upload:hover { background: #047857; }
+                .back-btn { background: #6b7280; margin-top: 20px; }
+                .back-btn:hover { background: #4b5563; }
             </style>
         </head>
         <body>
@@ -145,11 +120,11 @@ function createDashboardRedirect() {
                 <h1>📈 Dashboard Dirección</h1>
                 <p>Seleccione la acción que desea realizar</p>
                 
-                <a href="http://localhost:8000/dashboard" class="option-btn">
+                <a href="http://localhost:61800/Dashboard" class="option-btn">
                     📊 Ver Dashboard
                 </a>
                 
-                <a href="http://localhost:8000/dashboard/upload" class="option-btn upload">
+                <a href="http://localhost:61800/UploadExcel" class="option-btn upload">
                     📤 Subir Archivos Excel
                 </a>
                 
@@ -157,11 +132,6 @@ function createDashboardRedirect() {
                     ← Cerrar
                 </button>
             </div>
-            
-            <script>
-                // Set auth token as cookie for seamless access
-                document.cookie = 'authToken=${token}; path=/; max-age=${8 * 60 * 60}; SameSite=Lax';
-            </script>
         </body>
         </html>
     `);
