@@ -20,7 +20,8 @@ function renderDashboard(user) {
         { name: 'projects', displayName: 'Sistema de Proyectos SIEXUD', description: 'Gestión de proyectos de extensión universitaria', icon: '📋', color: 'blue' },
         { name: 'certificates', displayName: 'Módulo de Certificados', description: 'Gestión y emisión de certificados', icon: '🏆', color: 'green' },
         { name: 'dashboard', displayName: 'Dashboard Ejecutivo', description: 'Tablero de control y reportes', icon: '📊', color: 'purple' },
-        { name: 'calculadora', displayName: 'Calculadora Institucional', description: 'Sistema de cálculos matemáticos con permisos por rol', icon: '🧮', color: 'orange' }
+        { name: 'calculadora', displayName: 'Calculadora Institucional', description: 'Sistema de cálculos matemáticos con permisos por rol', icon: '🧮', color: 'orange' },
+        { name: 'dashboarddireccion', displayName: 'Dashboard Dirección', description: 'Sistema de análisis de datos Excel PMO, Financiera e Ingresos', icon: '📈', color: 'blue' }
     ];
     
     availableApps.forEach(app => {
@@ -45,17 +46,123 @@ function renderDashboard(user) {
 }
 
 function handleAppClick(appName, displayName) {
+    const token = localStorage.getItem('authToken');
+    
+    if (!token) {
+        alert('Sesión expirada. Por favor inicie sesión nuevamente.');
+        window.location.href = 'index.html';
+        return;
+    }
+
     if (appName === 'auth-admin') {
         window.location.href = 'admin.html';
     } else if (appName === 'calculadora') {
-        // SSO: Redirigir a calculadora con token
-        const token = localStorage.getItem('authToken');
-        if (token) {
-            window.location.href = `http://localhost:8081?token=${encodeURIComponent(token)}`;
-        } else {
-            alert('Error: No se encontró token de autenticación');
-        }
+        // Direct access through gateway with authentication
+        window.location.href = 'http://localhost:8000/calculator-app';
+    } else if (appName === 'dashboarddireccion') {
+        // Create redirect page for dashboard
+        createDashboardRedirect();
     } else {
-        alert(`Redirigiendo a ${displayName}...\n\nURL del microservicio: http://localhost:300X/${appName}\n\nEn producción, aquí se redirigiría al microservicio correspondiente.`);
+        alert(`Redirigiendo a ${displayName}...\n\nEn producción, aquí se redirigiría al microservicio correspondiente.`);
     }
+}
+
+function createDashboardRedirect() {
+    const token = localStorage.getItem('authToken');
+    
+    // Create a new window/tab with dashboard options
+    const dashboardWindow = window.open('', '_blank');
+    dashboardWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Dashboard Dirección - Opciones</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0;
+                    padding: 20px;
+                }
+                .container {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    max-width: 500px;
+                    width: 100%;
+                    text-align: center;
+                }
+                h1 {
+                    color: #1f2937;
+                    margin-bottom: 20px;
+                }
+                p {
+                    color: #6b7280;
+                    margin-bottom: 30px;
+                }
+                .option-btn {
+                    display: block;
+                    width: 100%;
+                    padding: 15px 20px;
+                    margin-bottom: 15px;
+                    background: #3b82f6;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    text-decoration: none;
+                    transition: background 0.2s;
+                }
+                .option-btn:hover {
+                    background: #2563eb;
+                }
+                .option-btn.upload {
+                    background: #059669;
+                }
+                .option-btn.upload:hover {
+                    background: #047857;
+                }
+                .back-btn {
+                    background: #6b7280;
+                    margin-top: 20px;
+                }
+                .back-btn:hover {
+                    background: #4b5563;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>📈 Dashboard Dirección</h1>
+                <p>Seleccione la acción que desea realizar</p>
+                
+                <a href="http://localhost:8000/dashboard" class="option-btn">
+                    📊 Ver Dashboard
+                </a>
+                
+                <a href="http://localhost:8000/dashboard/upload" class="option-btn upload">
+                    📤 Subir Archivos Excel
+                </a>
+                
+                <button onclick="window.close()" class="option-btn back-btn">
+                    ← Cerrar
+                </button>
+            </div>
+            
+            <script>
+                // Set auth token as cookie for seamless access
+                document.cookie = 'authToken=${token}; path=/; max-age=${8 * 60 * 60}; SameSite=Lax';
+            </script>
+        </body>
+        </html>
+    `);
 }
