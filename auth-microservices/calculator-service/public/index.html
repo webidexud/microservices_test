@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora - Sistema de Microservicios</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            min-width: 400px;
+            max-width: 500px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .user-info h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .user-info p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .roles {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+
+        .role-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .login-section {
+            text-align: center;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input, select, button {
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .calculator-section {
+            display: none;
+        }
+
+        .operation-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+        }
+
+        .operation-section.disabled {
+            opacity: 0.6;
+            background: #f8f9fa;
+        }
+
+        .operation-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .operation-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .operation-controls input {
+            flex: 1;
+            min-width: 80px;
+        }
+
+        .operation-controls select {
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+
+        .error {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #dc3545;
+            color: #721c24;
+        }
+
+        .test-users {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+
+        .test-users h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .test-users ul {
+            list-style: none;
+            font-size: 14px;
+        }
+
+        .test-users li {
+            margin-bottom: 5px;
+            color: #666;
+        }
+
+        .logout-btn {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧮 Calculadora con Roles</h1>
+            <p>Sistema de Microservicios - Demo</p>
+        </div>
+
+        <!-- Sección de Login -->
+        <div id="loginSection" class="login-section">
+            <form id="loginForm" class="login-form">
+                <div class="input-group">
+                    <label for="username">Usuario:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">Contraseña:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn">Iniciar Sesión</button>
+            </form>
+
+            <div class="test-users">
+                <h4>👥 Usuarios de Prueba:</h4>
+                <ul>
+                    <li><strong>admin</strong> / password123 - Super Admin</li>
+                    <li><strong>basic_user</strong> / password123 - Solo suma/resta</li>
+                    <li><strong>advanced_user</strong> / password123 - Todas las operaciones</li>
+                </ul>
+            </div>
+
+            <div id="loginError" class="error" style="display: none;"></div>
+        </div>
+
+        <!-- Sección de Calculadora -->
+        <div id="calculatorSection" class="calculator-section">
+            <!-- Info del usuario -->
+            <div id="userInfo" class="user-info"></div>
+
+            <!-- Operaciones Básicas -->
+            <div id="basicOperations" class="operation-section">
+                <h3>➕ Operaciones Básicas</h3>
+                <div class="operation-controls">
+                    <input type="number" id="basicA" placeholder="Número A" step="any">
+                    <select id="basicOp">
+                        <option value="add">Suma (+)</option>
+                        <option value="subtract">Resta (-)</option>
+                    </select>
+                    <input type="number" id="basicB" placeholder="Número B" step="any">
+                    <button id="calculateBasic" class="btn">Calcular</button>
+                </div>
+                <div id="basicResult"></div>
+            </div>
+
+            <!-- Operaciones Avanzadas -->
+            <div id="advancedOperations" class="operation-section">
+                <h3>🔢 Operaciones Avanzadas</h3>
+                <div class="operation-controls">
+                    <input type="number" id="advancedA" placeholder="Número A" step="any">
+                    <select id="advancedOp">
+                        <option value="multiply">Multiplicación (×)</option>
+                        <option value="divide">División (÷)</option>
+                        <option value="power">Potencia (^)</option>
+                    </select>
+                    <input type="number" id="advancedB" placeholder="Número B" step="any">
+                    <button id="calculateAdvanced" class="btn">Calcular</button>
+                </div>
+                <div id="advancedResult"></div>
+            </div>
+
+            <button id="logoutBtn" class="btn btn-secondary logout-btn">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <script>
+        let authToken = '';
+        let userProfile = null;
+
+        // Verificar si ya hay token al cargar
+        document.addEventListener('DOMContentLoaded', () => {
+            authToken = localStorage.getItem('authToken');
+            if (authToken) {
+                loadUserProfile();
+            }
+        });
+
+        // Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        application: 'calculator-service'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    localStorage.setItem('authToken', authToken);
+                    showCalculator();
+                    loadUserProfile();
+                } else {
+                    showError('loginError', data.error || 'Error de login');
+                }
+            } catch (error) {
+                showError('loginError', 'Error de conexión con el servidor');
+            }
+        });
+
+        // Cargar perfil del usuario
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/api/user/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    userProfile = data;
+                    updateUserInfo();
+                    updatePermissions();
+                    showCalculator();
+                } else {
+                    showLogin();
+                }
+            } catch (error) {
+                console.error('Error cargando perfil:', error);
+                showLogin();
+            }
+        }
+
+        // Actualizar información del usuario
+        function updateUserInfo() {
+            const userInfoDiv = document.getElementById('userInfo');
+            userInfoDiv.innerHTML = `
+                <h3>👤 Bienvenido, ${userProfile.user.username}</h3>
+                <p><strong>Email:</strong> ${userProfile.user.email}</p>
+                <div class="roles">
+                    ${userProfile.user.roles.map(role => `<span class="role-badge">${role}</span>`).join('')}
+                </div>
+            `;
+        }
+
+        // Actualizar permisos y habilitar/deshabilitar secciones
+        function updatePermissions() {
+            const basicSection = document.getElementById('basicOperations');
+            const advancedSection = document.getElementById('advancedOperations');
+            const basicBtn = document.getElementById('calculateBasic');
+            const advancedBtn = document.getElementById('calculateAdvanced');
+
+            if (userProfile.capabilities.basicOperations) {
+                basicSection.classList.remove('disabled');
+                basicBtn.disabled = false;
+            } else {
+                basicSection.classList.add('disabled');
+                basicBtn.disabled = true;
+            }
+
+            if (userProfile.capabilities.advancedOperations) {
+                advancedSection.classList.remove('disabled');
+                advancedBtn.disabled = false;
+            } else {
+                advancedSection.classList.add('disabled');
+                advancedBtn.disabled = true;
+            }
+        }
+
+        // Operaciones básicas
+        document.getElementById('calculateBasic').addEventListener('click', async () => {
+            const a = parseFloat(document.getElementById('basicA').value);
+            const b = parseFloat(document.getElementById('basicB').value);
+            const operation = document.getElementById('basicOp').value;
+            
+            if (isNaN(a) || isNaN(b)) {
+                showError('basicResult', 'Por favor ingrese números válidos');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/calculate/basic', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ operation, a, b })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('basicResult', data);
+                } else {
+                    showError('basicResult', data.error || 'Error en la operación');
+                }
+            } catch (error) {
+                showError('basicResult', 'Error de conexión');
+            }
+        });
+
+        // Operaciones avanzadas
+        document.getElementById('calculateAdvanced').addEventListener('click', async () => {
+            const a = parseFloat(document.getElementById('advancedA').value);
+            const b = parseFloat(document.getElementById('advancedB').value);
+            const operation = document.getElementById('advancedOp').value;
+            
+            if (isNaN(a) || isNaN(b)) {
+                showError('advancedResult', 'Por favor ingrese números válidos');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/calculate/advanced', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({ operation, a, b })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('advancedResult', data);
+                } else {
+                    showError('advancedResult', data.error || 'Error en la operación');
+                }
+            } catch (error) {
+                showError('advancedResult', 'Error de conexión');
+            }
+        });
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await fetch('http://localhost:3001/api/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+            } catch (error) {
+                console.error('Error en logout:', error);
+            }
+            
+            localStorage.removeItem('authToken');
+            authToken = '';
+            userProfile = null;
+            showLogin();
+        });
+
+        // Funciones auxiliares
+        function showLogin() {
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('calculatorSection').style.display = 'none';
+            clearError('loginError');
+        }
+
+        function showCalculator() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('calculatorSection').style.display = 'block';
+        }
+
+        function showResult(elementId, data) {
+            const element = document.getElementById(elementId);
+            const operationSymbols = {
+                add: '+',
+                subtract: '-',
+                multiply: '×',
+                divide: '÷',
+                power: '^'
+            };
+            
+            element.innerHTML = `
+                <div class="result">
+                    <strong>Resultado:</strong> ${data.operands.a} ${operationSymbols[data.operation]} ${data.operands.b} = <strong>${data.result}</strong>
+                    <br><small>Por: ${data.user} - ${new Date(data.timestamp).toLocaleString()}</small>
+                </div>
+            `;
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="error">${message}</div>`;
+            element.style.display = 'block';
+        }
+
+        function clearError(elementId) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'none';
+            element.innerHTML = '';
+        }
+    </script>
+</body>
+</html>
