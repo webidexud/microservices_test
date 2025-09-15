@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Autenticación - Universidad Distrital</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="logo">🛡️</div>
+                <h1>Universidad Distrital</h1>
+                <p>Sistema de Autenticación Institucional</p>
+            </div>
+            
+            <div class="login-form">
+                <div class="form-group">
+                    <label>Usuario Institucional</label>
+                    <input type="text" id="username" placeholder="Ingrese su usuario">
+                </div>
+                
+                <div class="form-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" placeholder="Ingrese su contraseña">
+                </div>
+                
+                <button onclick="login()" class="btn-primary">Iniciar Sesión</button>
+                
+                <div class="demo-info">
+                    <p><strong>Usuarios demo:</strong></p>
+                    <p>Admin: <code>admin</code> / <code>admin</code></p>
+                    <p>Demo: <code>demo</code> / <code>admin</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script>
+        // Verificar si ya está logueado
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('authToken');
+            if (token && isValidToken(token)) {
+                window.location.href = 'dashboard.html';
+            }
+            document.getElementById('username').focus();
+        });
+
+        // Permitir login con Enter
+        document.getElementById('password').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+    </script>
+</body>
+</html>
