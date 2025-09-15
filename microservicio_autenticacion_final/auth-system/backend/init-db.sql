@@ -41,7 +41,30 @@ CREATE TABLE user_app_roles (
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, app_role_id)
 );
+-- AÑADIR roles para dashboard direccion
+INSERT INTO app_roles (application_id, name, description, permissions) VALUES 
+-- Roles para dashboarddireccion
+((SELECT id FROM applications WHERE name = 'dashboarddireccion'), 'ADMIN', 'Administrador Dashboard Dirección', 
+ '["dashboarddireccion.view", "dashboarddireccion.upload", "dashboarddireccion.manage"]'),
+((SELECT id FROM applications WHERE name = 'dashboarddireccion'), 'USER', 'Usuario Dashboard Dirección', 
+ '["dashboarddireccion.view"]');
 
+-- AÑADIR aplicación dashboard direccion si no existe
+INSERT INTO applications (name, display_name, description) VALUES 
+('dashboarddireccion', 'Dashboard Dirección', 'Sistema de análisis de datos Excel PMO, Financiera e Ingresos')
+ON CONFLICT (name) DO NOTHING;
+
+-- Asignar roles de dashboard direccion al usuario admin
+INSERT INTO user_app_roles (user_id, app_role_id) VALUES 
+((SELECT id FROM users WHERE username = 'admin'), 
+ (SELECT id FROM app_roles WHERE application_id = (SELECT id FROM applications WHERE name = 'dashboarddireccion') AND name = 'ADMIN'))
+ON CONFLICT (user_id, app_role_id) DO NOTHING;
+
+-- Asignar rol de usuario de dashboard direccion al usuario demo
+INSERT INTO user_app_roles (user_id, app_role_id) VALUES 
+((SELECT id FROM users WHERE username = 'demo'), 
+ (SELECT id FROM app_roles WHERE application_id = (SELECT id FROM applications WHERE name = 'dashboarddireccion') AND name = 'USER'))
+ON CONFLICT (user_id, app_role_id) DO NOTHING;
 -- Insertar aplicaciones base
 INSERT INTO applications (name, display_name, description) VALUES 
 ('auth-admin', 'Administración del Sistema', 'Gestión de usuarios, roles y permisos'),

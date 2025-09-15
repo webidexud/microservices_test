@@ -3,13 +3,25 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configuración
+// Configuración MEJORADA para sesión global
 app.use(express.json());
-app.use(cors());
+app.use(cookieParser()); // NUEVO: Para manejar cookies
+
+// CORS MEJORADO para permitir cookies cross-origin
+app.use(cors({
+    origin: [
+        'http://localhost:8080',    // Auth frontend
+        'http://localhost:8081',    // Calculator frontend  
+        'http://localhost:61800',   // Dashboard frontend
+        'http://localhost:8000'     // API Gateway
+    ],
+    credentials: true // CRÍTICO: Permite cookies cross-origin
+}));
 
 // Base de datos con retry de conexión
 const pool = new Pool({
@@ -34,7 +46,39 @@ async function waitForDB() {
   throw new Error('No se pudo conectar a la base de datos');
 }
 
-// Middleware de autenticación
+// NUEVO: Middleware para validar sesión desde cookie O header
+const validateSession = async (req, res, next) => {
+    try {
+        // Buscar token en: Cookie -> Header -> Query param (compatibilidad)
+        let token = req.cookies.authToken || 
+                   req.header('Authorization')?.replace('Bearer ', '') ||
+                   req.query.token;
+
+        if (!token) {
+            return res.status(401).json({ error: 'No hay sesión activa' });
+        }
+
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        // Verificar si el usuario sigue activo en BD
+        const userCheck = await pool.query(
+            'SELECT id, is_active FROM users WHERE id = $1',
+            [decoded.sub]
+        );
+
+        if (userCheck.rows.length === 0 || !userCheck.rows[0].is_active) {
+            return res.status(401).json({ error: 'Usuario inactivo' });
+        }
+
+        req.user = decoded;
+        next();
+    } catch (error) {
+        console.error('Error validando sesión:', error);
+        return res.status(401).json({ error: 'Sesión inválida' });
+    }
+};
+
+// Middleware de autenticación LEGACY (mantener para compatibilidad)
 const authMiddleware = (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -51,10 +95,9 @@ const authMiddleware = (req, res, next) => {
 };
 
 // ============================================================================
-// ENDPOINTS
+// LOGIN MEJORADO CON SESIÓN GLOBAL
 // ============================================================================
 
-// LOGIN
 app.post('/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -101,15 +144,16 @@ app.post('/auth/login', async (req, res) => {
       ];
     }
 
-    // Generar JWT
+    // Generar JWT con expiración extendida para sesión
     const token = jwt.sign({
       sub: user.id,
       username: user.username,
       email: user.email,
       firstName: user.first_name,
       lastName: user.last_name,
-      apps: apps
-    }, JWT_SECRET, { expiresIn: '8h' });
+      apps: apps,
+      sessionId: `session_${user.id}_${Date.now()}` // ID único de sesión
+    }, JWT_SECRET, { expiresIn: '24h' }); // NUEVO: Sesión de 24 horas
 
     // Actualizar último login
     await pool.query(
@@ -117,7 +161,29 @@ app.post('/auth/login', async (req, res) => {
       [user.id]
     );
 
-    res.json({ token, user: { username: user.username, firstName: user.first_name } });
+    // NUEVO: ESTABLECER COOKIE DE SESIÓN GLOBAL
+    const cookieOptions = {
+        httpOnly: false, // Permitir acceso desde JavaScript para compatibilidad
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000, // 24 horas
+        domain: process.env.NODE_ENV === 'production' ? '.tu-dominio.com' : undefined
+    };
+
+    res.cookie('authToken', token, cookieOptions);
+
+    // Respuesta con información del usuario
+    res.json({
+        success: true,
+        token, // Aún enviamos el token para compatibilidad
+        user: {
+            username: user.username,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            apps: Object.keys(apps)
+        },
+        sessionEstablished: true
+    });
 
   } catch (error) {
     console.error('Error en login:', error);
@@ -125,12 +191,30 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
-// VALIDAR TOKEN (para otros microservicios)
-app.get('/auth/validate/:appName', authMiddleware, (req, res) => {
+// NUEVO: Endpoint para verificar sesión activa
+app.get('/auth/check-session', validateSession, (req, res) => {
+    res.json({
+        authenticated: true,
+        user: {
+            username: req.user.username,
+            firstName: req.user.firstName,
+            lastName: req.user.lastName,
+            email: req.user.email
+        },
+        apps: req.user.apps,
+        sessionId: req.user.sessionId
+    });
+});
+
+// VALIDAR TOKEN (para otros microservicios) - MEJORADO
+app.get('/auth/validate/:appName', validateSession, (req, res) => {
   const { appName } = req.params;
   
   if (!req.user.apps[appName]) {
-    return res.status(403).json({ error: 'Sin acceso a esta aplicación' });
+    return res.status(403).json({ 
+        error: 'Sin acceso a esta aplicación',
+        availableApps: Object.keys(req.user.apps)
+    });
   }
 
   res.json({
@@ -140,10 +224,36 @@ app.get('/auth/validate/:appName', authMiddleware, (req, res) => {
   });
 });
 
-// INFO DEL USUARIO
-app.get('/auth/me', authMiddleware, (req, res) => {
-  res.json(req.user);
+// INFO DEL USUARIO - MEJORADO
+app.get('/auth/me', validateSession, (req, res) => {
+  res.json({
+    user: req.user,
+    authenticated: true
+  });
 });
+
+// LOGOUT MEJORADO CON LIMPIEZA DE COOKIES
+app.post('/auth/logout', validateSession, (req, res) => {
+    try {
+        // Limpiar cookie
+        res.clearCookie('authToken', {
+            domain: process.env.NODE_ENV === 'production' ? '.tu-dominio.com' : undefined,
+            path: '/'
+        });
+
+        res.json({ 
+            success: true,
+            message: 'Sesión cerrada exitosamente'
+        });
+    } catch (error) {
+        console.error('Error en logout:', error);
+        res.status(500).json({ error: 'Error cerrando sesión' });
+    }
+});
+
+// ============================================================================
+// ENDPOINTS DE ADMINISTRACIÓN (MANTENER TODOS LOS EXISTENTES)
+// ============================================================================
 
 // LISTAR USUARIOS (solo super admin)
 app.get('/admin/users', authMiddleware, async (req, res) => {
@@ -407,7 +517,9 @@ async function startServer() {
     await waitForDB();
     
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Servidor Auth corriendo en puerto ${PORT}`);
+      console.log(`🚀 Servidor Auth con SESIÓN GLOBAL en puerto ${PORT}`);
+      console.log(`🍪 Cookies habilitadas para sesión global`);
+      console.log(`🔐 Sesiones válidas por 24 horas`);
       console.log(`📊 Base de datos: ${process.env.DATABASE_URL?.split('@')[1] || 'No configurada'}`);
     });
   } catch (error) {

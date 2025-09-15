@@ -1,94 +1,185 @@
 const API_BASE = 'http://localhost:3002';
-const AUTH_BASE = 'http://localhost:8080';
+const AUTH_BASE = 'http://localhost:3001';
 
 let currentUser = null;
 let userPermissions = [];
 let currentExpression = '';
 
 // ============================================================================
-// INICIALIZACIÓN CON SSO
+// INICIALIZACIÓN CON SESIÓN GLOBAL - NUEVO
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async function() {
-    // SSO: Leer token de URL o localStorage
+    console.log('🧮 Inicializando calculadora...');
+    
+    try {
+        // NUEVO: Intentar inicializar con sesión global
+        const authResult = await initializeWithGlobalSession();
+        
+        if (authResult.success) {
+            console.log('✅ Sesión global válida');
+            await loadUserInfoFromSession(authResult.data);
+            initializeCalculator();
+        } else {
+            console.log('❌ Sin sesión global, intentando método legacy');
+            await tryLegacyAuth();
+        }
+    } catch (error) {
+        console.error('Error en inicialización:', error);
+        showLoginRequired();
+    }
+});
+
+// NUEVO: Verificar sesión global
+async function initializeWithGlobalSession() {
+    try {
+        // Verificar si hay sesión activa
+        const sessionResponse = await fetch(`${AUTH_BASE}/auth/check-session`, {
+            method: 'GET',
+            credentials: 'include', // Incluir cookies
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!sessionResponse.ok) {
+            return { success: false, error: 'No hay sesión activa' };
+        }
+
+        const sessionData = await sessionResponse.json();
+        
+        // Verificar acceso específico a calculadora
+        const appResponse = await fetch(`${AUTH_BASE}/auth/validate/calculadora`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!appResponse.ok) {
+            const error = await appResponse.json();
+            return { success: false, error: error.error || 'Sin acceso a calculadora' };
+        }
+
+        const appData = await appResponse.json();
+        
+        return {
+            success: true,
+            data: {
+                user: sessionData.user,
+                appAccess: appData.appAccess,
+                permissions: appData.appAccess.permissions,
+                roles: appData.appAccess.roles
+            }
+        };
+        
+    } catch (error) {
+        console.error('Error verificando sesión global:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+// MANTENER: Método legacy para compatibilidad (token por URL)
+async function tryLegacyAuth() {
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
     
     let token = localStorage.getItem('authToken');
     
     if (tokenFromUrl) {
-        console.log('Token recibido por URL, guardando en localStorage...');
-        // Guardar token de URL en localStorage
+        console.log('Token recibido por URL, guardando...');
         localStorage.setItem('authToken', tokenFromUrl);
         token = tokenFromUrl;
         
-        // Limpiar URL sin recargar la página
+        // Limpiar URL
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
     }
     
     if (!token) {
-        console.log('No se encontró token, mostrando login requerido');
         showLoginRequired();
         return;
     }
     
     try {
-        console.log('Cargando información del usuario...');
-        await loadUserInfo();
+        await loadUserInfoLegacy();
         initializeCalculator();
     } catch (error) {
-        console.error('Error loading user info:', error);
-        // Si el token es inválido, limpiar localStorage y mostrar login
+        console.error('Error con método legacy:', error);
         localStorage.removeItem('authToken');
         showLoginRequired();
     }
-});
+}
 
-async function loadUserInfo() {
-    const token = localStorage.getItem('authToken');
+// NUEVO: Cargar info del usuario desde sesión global
+async function loadUserInfoFromSession(authData) {
+    currentUser = {
+        username: authData.user.username,
+        firstName: authData.user.firstName,
+        lastName: authData.user.lastName
+    };
     
-    console.log('Haciendo petición a:', `${API_BASE}/api/user-info`);
+    userPermissions = authData.permissions || [];
+    
+    console.log('Usuario cargado:', currentUser.username);
+    console.log('Permisos:', userPermissions);
+    
+    updateUI();
+}
+
+// MANTENER: Método legacy de carga de usuario
+async function loadUserInfoLegacy() {
+    const token = localStorage.getItem('authToken');
     
     const response = await fetch(`${API_BASE}/api/user-info`, {
         headers: { 'Authorization': `Bearer ${token}` }
     });
     
-    console.log('Respuesta del servidor:', response.status);
-    
     if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        throw new Error(`Failed to load user info: ${errorData.error || response.statusText}`);
+        throw new Error('Failed to load user info');
     }
     
     const data = await response.json();
-    console.log('Datos del usuario cargados:', data);
     
     currentUser = data.user;
     userPermissions = data.permissions;
     
-    // Actualizar UI
-    document.getElementById('userInfo').textContent = `${data.user.firstName} ${data.user.lastName}`;
+    updateUI();
+}
+
+// NUEVO: Actualizar interfaz de usuario
+function updateUI() {
+    document.getElementById('userInfo').textContent = 
+        `${currentUser.firstName || currentUser.username} ${currentUser.lastName || ''}`.trim();
     
+    // Actualizar badge de rol si existe
     const roleElement = document.getElementById('userRole');
-    const userRole = data.roles[0] || 'SIN_ROL';
-    roleElement.textContent = userRole;
-    roleElement.className = `role-badge ${userRole.toLowerCase()}`;
+    if (roleElement && userPermissions.length > 0) {
+        const hasAdvancedPerms = userPermissions.some(p => 
+            p.includes('division') || p.includes('multiplicacion') || p.includes('historial')
+        );
+        const role = hasAdvancedPerms ? 'CONTADOR' : 'VISUALIZADOR';
+        
+        roleElement.textContent = role;
+        roleElement.className = `role-badge ${role.toLowerCase()}`;
+    }
     
     updatePermissionsUI();
     updateCalculatorButtons();
 }
 
 function initializeCalculator() {
-    console.log('Inicializando calculadora...');
+    console.log('✅ Calculadora inicializada');
     document.getElementById('loginRequired').style.display = 'none';
     document.getElementById('calculatorApp').style.display = 'block';
     
     // Mostrar historial solo si tiene permisos
     if (userPermissions.includes('calculadora.historial')) {
-        document.getElementById('historialSection').style.display = 'block';
-        console.log('Historial habilitado');
+        const historialSection = document.getElementById('historialSection');
+        if (historialSection) {
+            historialSection.style.display = 'block';
+        }
     }
 }
 
@@ -98,20 +189,34 @@ function showLoginRequired() {
 }
 
 // ============================================================================
-// AUTENTICACIÓN
+// FUNCIONES DE NAVEGACIÓN - MEJORADAS
 // ============================================================================
 
 function redirectToAuth() {
-    window.location.href = AUTH_BASE;
+    window.location.href = 'http://localhost:8080';
 }
 
-function logout() {
-    localStorage.removeItem('authToken');
-    window.location.href = AUTH_BASE;
+async function logout() {
+    try {
+        // NUEVO: Intentar logout con sesión global
+        await fetch(`${AUTH_BASE}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+    } catch (error) {
+        console.error('Error en logout:', error);
+    } finally {
+        // Limpiar localStorage por compatibilidad
+        localStorage.removeItem('authToken');
+        window.location.href = 'http://localhost:8080';
+    }
 }
 
 // ============================================================================
-// CALCULADORA
+// FUNCIONES DE CALCULADORA (MANTENER TODAS)
 // ============================================================================
 
 function updateCalculatorButtons() {
@@ -123,13 +228,13 @@ function updateCalculatorButtons() {
         if (!userPermissions.includes(permission)) {
             button.disabled = true;
             button.title = `Requiere permiso: ${permission}`;
-            console.log(`Botón deshabilitado: ${permission}`);
         }
     });
 }
 
 function updatePermissionsUI() {
     const container = document.getElementById('permissionsList');
+    if (!container) return;
     
     const allPermissions = [
         'calculadora.suma',
@@ -310,7 +415,7 @@ function getOperatorSymbol(operacion) {
 }
 
 // ============================================================================
-// EVENTOS DE TECLADO
+// EVENTOS DE TECLADO (MANTENER)
 // ============================================================================
 
 document.addEventListener('keydown', function(e) {
