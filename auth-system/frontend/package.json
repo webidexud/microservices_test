@@ -1,8 +1,0 @@
-{
-  "name": "auth-system-frontend",
-  "version": "1.0.0",
-  "description": "Frontend del Sistema de Autenticación",
-  "scripts": {
-    "start": "nginx -g 'daemon off;'"
-  }
-}
